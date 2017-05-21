@@ -11,9 +11,9 @@
 
 '''
 
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import with_statement
+
+
+
 
 import heapq
 import logging
@@ -34,9 +34,9 @@ from whoosh.qparser import MultifieldParser
 from whoosh.qparser import OrGroup
 
 try:
-    unicode
+    str
 except NameError:
-    unicode = str
+    str = str
 
 __version__ = '0.7.5'
 
@@ -80,7 +80,7 @@ class _QueryProxy(flask_sqlalchemy.BaseQuery):
             # Push items onto heap, where sort value is the rank provided by
             # Whoosh
             if hasattr(row, self._primary_key_name):
-                pk = unicode(getattr(row, self._primary_key_name))
+                pk = str(getattr(row, self._primary_key_name))
                 heapq.heappush(ordered_by_whoosh_rank,
                                (self._whoosh_rank[pk], row))
             else:
@@ -114,8 +114,8 @@ class _QueryProxy(flask_sqlalchemy.BaseQuery):
         '''
         if not query:
             return self.filter(sqlalchemy.text('null'))
-        if not isinstance(query, unicode):
-            query = unicode(query)
+        if not isinstance(query, str):
+            query = str(query)
 
         results = self._whoosh_searcher(query, limit, fields, or_)
 
@@ -134,14 +134,14 @@ class _QueryProxy(flask_sqlalchemy.BaseQuery):
             # and fuzzy search result appended behind using SQL LIKE
             query_colums = []
             if fields is None:
-                fields = self._whoosh_searcher._index.schema._fields.keys()
+                fields = list(self._whoosh_searcher._index.schema._fields.keys())
             for clm in set(fields) - {self._primary_key_name}:
                 attr = getattr(self._modelclass, clm)
                 if isinstance(attr, InstrumentedAttribute):
-                    query_colums.append(attr.like(u'%{}%'.format(query)))
+                    query_colums.append(attr.like('%{}%'.format(query)))
             id_tuples = self.filter(sqlalchemy.or_(*query_colums)) \
                 .with_entities(self._primary_key_name).all()
-            ids = [unicode(i[0]) for i in id_tuples]
+            ids = [str(i[0]) for i in id_tuples]
             ids = sorted(set(ids) - result_set)
             if ids:
                 for rank, pk in enumerate(ids[:like_limit]):
@@ -312,7 +312,7 @@ def _after_flush(app, changes):
     if not bytype:
         return
     try:
-        for model, values in bytype.items():
+        for model, values in list(bytype.items()):
             index = whoosh_index(app, values[0][1].__class__)
             with index.writer() as writer:
                 for update, v in values:
@@ -340,18 +340,18 @@ def index_one_record(record, delete=False, writer=None, index_parent=False):
     if not delete:
         attrs = {}
         for key in searchable:
-            attrs[key] = unicode(getattr(record, key))
-        attrs[primary_field] = unicode(
+            attrs[key] = str(getattr(record, key))
+        attrs[primary_field] = str(
             getattr(record, primary_field))
         writer.update_document(**attrs)
         if index_parent:
             parent_writer.update_document(**attrs)
     else:
         writer.delete_by_term(
-            primary_field, unicode(getattr(record, primary_field)))
+            primary_field, str(getattr(record, primary_field)))
         if index_parent:
             parent_writer.delete_by_term(
-                primary_field, unicode(getattr(record, primary_field)))
+                primary_field, str(getattr(record, primary_field)))
     if close:
         writer.commit()
 
@@ -368,8 +368,8 @@ def whoosh_index_all(app):
     """
     app -> [indexes]
     """
-    all_models = app.extensions[
-        'sqlalchemy'].db.Model._decl_class_registry.values()
+    all_models = list(app.extensions[
+        'sqlalchemy'].db.Model._decl_class_registry.values())
     models = [i for i in all_models if hasattr(i, '__searchable__')]
     return [(m, whoosh_index(app, m)) for m in models]
 
